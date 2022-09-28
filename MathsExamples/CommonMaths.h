@@ -19,3 +19,6 @@ struct Axes
 };
 
 void DrawAxes( Axes& a, std::string font );
+
+void DrawSpriteArrow( Vector2f startPoint, Vector2f endPoint, const char* penSprite, Play::Colour c );
+void DrawSpriteCross( Vector2f centrePoint, const char* penSprite, Play::Colour c );

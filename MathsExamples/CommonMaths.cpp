@@ -42,3 +42,20 @@ void DrawAxes( Axes& a, std::string font )
 		}
 	}
 }
+
+void DrawSpriteArrow( Vector2f startPoint, Vector2f endPoint, const char* penSprite, Play::Colour c )
+{
+	Vector2f unitVec = normalize( endPoint - startPoint );
+	Vector2f unitParallelVec = { unitVec.y, -unitVec.x };
+
+	Play::DrawSpriteLine( startPoint, endPoint, penSprite, c );
+	Play::DrawSpriteLine( endPoint - ( unitVec * 25 ) + ( unitParallelVec * 10 ), endPoint, penSprite, c );
+	Play::DrawSpriteLine( endPoint - ( unitVec * 25 ) - ( unitParallelVec * 10 ), endPoint, penSprite, c );
+}
+
+void DrawSpriteCross( Vector2f centrePoint, const char* penSprite, Play::Colour c )
+{
+	Play::DrawSpriteLine( centrePoint + Vector2f( -20, -20 ), centrePoint + Vector2f( 20, 20 ), penSprite, c );
+	Play::DrawSpriteLine( centrePoint + Vector2f( -20, 20 ), centrePoint + Vector2f( 20, -20 ), penSprite, c );
+}
+

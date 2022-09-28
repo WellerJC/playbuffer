@@ -1,7 +1,7 @@
 #define PLAY_IMPLEMENTATION
 #include "Play.h"
 
-#include "CommonMaths.h"
+#include "MathsExamples/CommonMaths.h"
 
 constexpr int DISPLAY_WIDTH = 720;
 constexpr int DISPLAY_HEIGHT = 720;
@@ -136,7 +136,7 @@ void UpdateApplication()
 
 	// Draw the rocket's director vector and the rotation circle
 	Play::DrawSpriteLine( { circleAxes.origin.x, circleAxes.origin.y }, { rocketVec.x , rocketVec.y }, "pen4px", Play::cYellow );
-	Play::DrawSpriteCircle( circleAxes.origin.x, circleAxes.origin.y, GRID_SIZE * 2, "pen4px", Play::cYellow );
+	Play::DrawSpriteCircle( circleAxes.origin, GRID_SIZE * 2, "pen4px", Play::cYellow );
 
 	// Draw the lines between the rocket's vector and the sine/cosine graphs
 	Play::DrawSpriteLine( { rocketVec.x, rocketVec.y }, { cosPoint.x , cosPoint.y }, "pen2px", Play::cBlack );

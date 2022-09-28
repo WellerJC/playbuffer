@@ -9,10 +9,10 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Play.h">
+    <ClInclude Include="CommonMaths.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CommonMaths.h">
+    <ClInclude Include="..\..\Play.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -20,7 +20,7 @@
     <ClCompile Include="MainGame.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CommonMaths.cpp">
+    <ClCompile Include="..\CommonMaths.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
