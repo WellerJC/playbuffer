@@ -6,10 +6,17 @@ int DISPLAY_WIDTH = 1280;
 int DISPLAY_HEIGHT = 720;
 int DISPLAY_SCALE = 1;
 
+enum Agent8State {
+	STATE_APPEAR = 0,
+	STATE_HALT,
+	STATE_PLAY,
+	STATE_DEAD,
+};
 
 struct GameState 
 {
 	int score = 0;
+	Agent8State agentState = STATE_APPEAR;
 };
 
 GameState gameState;
@@ -29,6 +36,9 @@ void HandlePlayerControls();
 void UpdateFan();
 void UpdateTools();
 void UpdateCoinsAndStars();
+void UpdateLasers();
+void UpdateDestroyed();
+void UpdateAgent8();
 
 // The entry point for a PlayBuffer program
 void MainGameEntry( PLAY_IGNORE_COMMAND_LINE )
@@ -40,7 +50,7 @@ void MainGameEntry( PLAY_IGNORE_COMMAND_LINE )
 	//This loads the background PNG
 	Play::LoadBackground("Data\\Backgrounds\\background.png");
 	//This plays the music for the game
-	//Play::StartAudioLoop("music");
+	Play::StartAudioLoop("music");
 	//These create the player and fan sprite also setting the velocity and animation speed of the fan
 	Play::CreateGameObject(TYPE_AGENT8, { 115, 0 }, 50, "agent8");
 	int id_fan = Play::CreateGameObject(TYPE_FAN, { 1140,217 }, 0, "fan");
@@ -52,10 +62,14 @@ void MainGameEntry( PLAY_IGNORE_COMMAND_LINE )
 bool MainGameUpdate( float elapsedTime )
 {
 	Play::DrawBackground();
-	HandlePlayerControls();
+	UpdateAgent8();
 	UpdateFan();
 	UpdateTools();
 	UpdateCoinsAndStars();
+	UpdateLasers();
+	UpdateDestroyed();
+	Play::DrawFontText("64px", "ARROW KEYS TO MOVE UP AND DOWN AND SPACE TO FIRE", { DISPLAY_WIDTH / 2, DISPLAY_HEIGHT - 30 }, Play::CENTRE);
+	Play::DrawFontText("132px", "SCORE: " + std::to_string(gameState.score), { DISPLAY_WIDTH / 2, 50 }, Play::CENTRE);
 	Play::PresentDrawingBuffer();
 	return Play::KeyDown( VK_ESCAPE );
 }
@@ -85,18 +99,30 @@ void HandlePlayerControls()
 	//This resets the players velocity and acceleration when neither buttons are pressed
 	else 
 	{
-		Play::SetSprite(obj_agent8, "agent8_hang", 0.02f);
-		obj_agent8.velocity *= 0.5f;
-		obj_agent8.acceleration = { 0,0 };
+		if (obj_agent8.velocity.y > 5) {
+			gameState.agentState = STATE_HALT;
+			Play::SetSprite(obj_agent8, "agent8_halt", 0.333f);
+			obj_agent8.acceleration = { 0,0 };
+		}
+		else {
+			Play::SetSprite(obj_agent8, "agent8_hang", 0.02f);
+			obj_agent8.velocity *= 0.5f;
+			obj_agent8.acceleration = { 0,0 };
+		}
+	}
+	//This shoots a laser from the sprite
+	if (Play::KeyPressed(VK_SPACE)) {
+		Vector2D firePos = obj_agent8.pos + Vector2D(155, -75);
+		int id = Play::CreateGameObject(TYPE_LASER, firePos, 30, "laser");
+		Play::GetGameObject(id).velocity = { 32,0 };
+		Play::PlayAudio("shoot");
 	}
 	Play::UpdateGameObject(obj_agent8);
-
+	
 	//This stops the player from leaving the game window
+	//I have decided to leave this in as the one in the UpdateAgent8() function doesnt seem to be stopping the player from leaving the display boundaries
 	if (Play::IsLeavingDisplayArea(obj_agent8)) obj_agent8.pos = obj_agent8.oldPos;
-
-	//This draws the string that the players sprite hangs from
-	Play::DrawLine({ obj_agent8.pos.x, 0 }, obj_agent8.pos, Play::cWhite);
-	Play::DrawObjectRotated(obj_agent8);
+	
 }
 
 void UpdateFan() 
@@ -141,10 +167,10 @@ void UpdateTools()
 	for (int id : vTools) {
 		GameObject& obj_tool = Play::GetGameObject(id);
 		//If a tool collides with the player this code will stop the music, play death sound effect and moves the players sprite off the screen
-		if (Play::IsColliding(obj_tool, obj_agent8)) {
+		if (gameState.agentState != STATE_DEAD && Play::IsColliding(obj_tool, obj_agent8)) {
 			Play::StopAudioLoop("music");
 			Play::PlayAudio("die");
-			obj_agent8.pos = { -100, -100 };
+			gameState.agentState = STATE_DEAD;
 		}
 		Play::UpdateGameObject(obj_tool);
 
@@ -161,5 +187,143 @@ void UpdateTools()
 }
 
 void UpdateCoinsAndStars() {
+	GameObject& obj_agent8 = Play::GetGameObjectByType(TYPE_AGENT8);
+	std::vector<int> vCoins = Play::CollectGameObjectIDsByType(TYPE_COIN);
 
+	for (int id_coin : vCoins) {
+		GameObject& obj_coin = Play::GetGameObject(id_coin);
+		bool hasCollided = false;
+
+		//This if statement detect if the coin has collided with the player and if it has it adds points to the players score and spawns in star.pngs
+		if (Play::IsColliding(obj_coin, obj_agent8)) {
+			for (float rad{ 0.25f }; rad < 2.0f; rad += 0.5f) {
+				int id = Play::CreateGameObject(TYPE_STAR, obj_agent8.pos, 0, "star");
+				GameObject& obj_star = Play::GetGameObject(id);
+				obj_star.rotSpeed = 0.1f;
+				obj_star.acceleration = { 0.0f, 0.5f };
+				Play::SetGameObjectDirection(obj_star, 16, rad * PLAY_PI);
+			}
+			hasCollided = true;
+			gameState.score += 500;
+			Play::PlayAudio("collect");
+		}
+		Play::UpdateGameObject(obj_coin);
+		Play::DrawObjectRotated(obj_coin);
+
+		//If the coin has collided with the player this removes the coin from the scene
+		if (!Play::IsVisible(obj_coin) || hasCollided) Play::DestroyGameObject(id_coin);
+	}
+
+	std::vector<int> vStars = Play::CollectGameObjectIDsByType(TYPE_STAR);
+
+	//This creates the star animation when a player collects a coin
+	for (int id_star : vStars) {
+		GameObject& obj_star = Play::GetGameObject(id_star);
+		Play::UpdateGameObject(obj_star);
+		Play::DrawObjectRotated(obj_star);
+
+		if (!Play::IsVisible(obj_star)) Play::DestroyGameObject(id_star);
+	}
+}
+
+void UpdateLasers() {
+	std::vector<int> vLasers = Play::CollectGameObjectIDsByType(TYPE_LASER);
+	std::vector<int> vTools = Play::CollectGameObjectIDsByType(TYPE_TOOL);
+	std::vector<int> vCoins = Play::CollectGameObjectIDsByType(TYPE_COIN);
+
+	for (int id_laser : vLasers) {
+		GameObject& obj_laser = Play::GetGameObject(id_laser);
+		bool hasCollided = false;
+		//This determines if the laser collided with a tool or coin and filters it to run the necessary code
+		for (int id_tool : vTools) {
+			GameObject& obj_tool = Play::GetGameObject(id_tool);
+			if (Play::IsColliding(obj_laser, obj_tool)) {
+				hasCollided = true;
+				obj_tool.type = TYPE_DESTROYED;
+				gameState.score += 100;
+			}
+		}
+
+		for (int id_coin : vCoins) {
+			GameObject& obj_coin = Play::GetGameObject(id_coin);
+			if (Play::IsColliding(obj_laser, obj_coin)) {
+				hasCollided = true;
+				obj_coin.type = TYPE_DESTROYED;
+				Play::PlayAudio("error");
+				gameState.score -= 300;
+			}
+		}
+
+		//This if statement makes sure that the players score doesnt fall beneath zero in case they were to get a -300 penalty with less than 300 points in their score
+		if (gameState.score < 0) gameState.score = 0;
+
+		Play::UpdateGameObject(obj_laser);
+		Play::DrawObject(obj_laser);
+
+		//This will detect whether the lasers are off the players screen or have collided with another sprite, if so this remove them from the scene
+		if (!Play::IsVisible(obj_laser) || hasCollided) Play::DestroyGameObject(id_laser);
+	}
+}
+
+void UpdateDestroyed() {
+	std::vector<int> vDead = Play::CollectGameObjectIDsByType(TYPE_DESTROYED);
+
+	//This code comes into a effect when a player shoots either a tool or coin giving the object the effect that it is fading out
+	//instead of just dissappearing upon collision
+	for (int id_dead : vDead) {
+		GameObject& obj_dead = Play::GetGameObject(id_dead);
+		obj_dead.animSpeed = 0.2f;
+		Play::UpdateGameObject(obj_dead);
+
+		if (obj_dead.frame % 2) Play::DrawObjectRotated(obj_dead, (10 - obj_dead.frame) / 10.0f);
+
+		if (!Play::IsVisible(obj_dead) || obj_dead.frame >= 10) Play::DestroyGameObject(id_dead);
+	}
+}
+
+void UpdateAgent8() {
+	GameObject& obj_agent8 = Play::GetGameObjectByType(TYPE_AGENT8);
+
+	switch (gameState.agentState) {
+	//This case is used at the start of the game to move the player 1/3 of the way down the screen
+	case STATE_APPEAR:
+		obj_agent8.velocity = { 0,12 };
+		obj_agent8.acceleration = { 0,0.5f };
+		Play::SetSprite(obj_agent8, "agent8_fall", 0);
+		obj_agent8.rotation = 0;
+		if (obj_agent8.pos.y >= DISPLAY_HEIGHT / 3) gameState.agentState = STATE_PLAY;
+		break;
+	//This case is used when the player stops moving slowing the players velocity so that the moving animation finishes then it chase to the play state
+	case STATE_HALT:
+		obj_agent8.velocity *= 0.9f;
+		if (Play::IsAnimationComplete(obj_agent8)) gameState.agentState = STATE_PLAY;
+		break;
+	//This case is used in general giving the player access to the HandlePlayerControls() which lets them control agent 8
+	case STATE_PLAY:
+		HandlePlayerControls();
+		break;
+	//This case is used when the player collides with a tool, this gievs the player the option to restart the game via space
+	//It restarts the music and destroy any objects still in the scene and returns the agents state to its first state and position
+	case STATE_DEAD:
+		obj_agent8.acceleration = { -0.3f, 0.5f };
+		obj_agent8.rotation += 0.25f;
+		if (Play::KeyPressed(VK_SPACE) == true) {
+			gameState.agentState = STATE_APPEAR;
+			obj_agent8.pos = { 115,0 };
+			obj_agent8.velocity = { 0,0 };
+			obj_agent8.frame = 0;
+			Play::StartAudioLoop("music");
+			gameState.score = 0;
+
+			for (int id_obj : Play::CollectGameObjectIDsByType(TYPE_TOOL)) Play::GetGameObject(id_obj).type = TYPE_DESTROYED;
+		}
+		break;
+	}
+
+	Play::UpdateGameObject(obj_agent8);
+
+	if (Play::IsLeavingDisplayArea(obj_agent8) && gameState.agentState != STATE_DEAD) obj_agent8.pos = obj_agent8.oldPos;
+
+	Play::DrawLine({ obj_agent8.pos.x, 0 }, obj_agent8.pos, Play::cWhite);
+	Play::DrawObjectRotated(obj_agent8);
 }
